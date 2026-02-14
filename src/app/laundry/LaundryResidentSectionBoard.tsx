@@ -91,7 +91,7 @@ export default function LaundryResidentSectionBoard({ projectId }: Props) {
   const validProjectId =
     typeof projectId === "string" && projectId.trim().length > 0;
 
-  const [projectName, setProjectName] = useState<string | null>(null);
+
   const [config, setConfig] = useState<LaundryBoardConfigV2 | null>(null);
 
   // ✅ 画面を開いた時は常に今日
@@ -119,14 +119,7 @@ export default function LaundryResidentSectionBoard({ projectId }: Props) {
     sectionKeyRef.current = sectionKey;
   }, [sectionKey]);
 
-  // project meta
-  useEffect(() => {
-    if (!validProjectId) return;
-    const unsub = subscribeProjectNameById(projectId, (name) =>
-      setProjectName(name),
-    );
-    return () => unsub();
-  }, [projectId, validProjectId]);
+
 
   // config
   useEffect(() => {
@@ -296,7 +289,7 @@ export default function LaundryResidentSectionBoard({ projectId }: Props) {
             value={roomFilterText}
             onChange={(e) => setRoomFilterText(e.target.value)}
             placeholder="例）305（空で全表示）"
-            className="w-[170px] rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900
+            className="w-42.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900
                        dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
           />
 
@@ -442,7 +435,7 @@ function SectionBoard({
                 const status: LaundryStatus = map[filteredHit.room.id] ?? "ok";
                 return (
                   <div
-                    className="min-w-[64px] rounded-2xl border border-gray-200 bg-white p-3 text-center
+                    className="min-w-11.5 rounded-2xl border border-gray-200 bg-white p-3 text-center
                                dark:border-gray-800 dark:bg-gray-950"
                     title={`${section.sectionName} / ${filteredHit.floor}F / ${filteredHit.room.label}号室 / ${STATUS_HELP[status]}`}
                   >
@@ -506,7 +499,7 @@ function SectionBoard({
                     return (
                       <div
                         key={r.id}
-                        className="min-w-[46px] rounded-xl border border-gray-200 bg-white p-1 text-center dark:border-gray-800 dark:bg-gray-900"
+                        className="min-w-11.5 rounded-xl border border-gray-200 bg-white p-1 text-center dark:border-gray-800 dark:bg-gray-900"
                         title={`${section.sectionName} / ${f.floor}F / ${r.label}号室 / ${STATUS_HELP[status]}`}
                       >
                         <div className="text-[10px] font-bold text-gray-600 dark:text-gray-300">

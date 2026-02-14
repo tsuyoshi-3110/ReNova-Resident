@@ -3,10 +3,18 @@
 import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  updateProfile,
+  type AuthError,
+} from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db } from "../lib/firebaseClient";
+
+function isAuthError(e: unknown): e is AuthError {
+  return typeof e === "object" && e !== null && "code" in e;
+}
 
 function normalizeCode(input: string): string {
   return input.replace(/\s+/g, "").trim().toUpperCase();
@@ -53,8 +61,16 @@ export default function RegisterPage() {
       setErrorText("シェアコードを入力してください");
       return;
     }
-    if (!email || !password) {
+
+    const mail = normalizeText(email).toLowerCase();
+    const pass = password;
+
+    if (!mail || !pass) {
       setErrorText("メールとパスワードを入力してください");
+      return;
+    }
+    if (pass.length < 6) {
+      setErrorText("パスワードは6文字以上で入力してください");
       return;
     }
 
@@ -96,7 +112,7 @@ export default function RegisterPage() {
       }
 
       // 3) Auth 作成
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      const cred = await createUserWithEmailAndPassword(auth, mail, pass);
 
       // 4) Firebase Auth の displayName を「名前」にする
       await updateProfile(cred.user, { displayName });
@@ -108,7 +124,7 @@ export default function RegisterPage() {
         doc(db, "residentMembers", uid),
         {
           uid,
-          email,
+          email: mail,
           displayName,
 
           shareCode,
@@ -136,7 +152,30 @@ export default function RegisterPage() {
       );
 
       router.replace("/menu");
+
+      // 念のため: 本番で replace 後に画面が更新されないケースのフォールバック
+      window.setTimeout(() => {
+        try {
+          if (window.location.pathname !== "/menu") {
+            window.location.href = "/menu";
+          }
+        } catch {
+          // ignore
+        }
+      }, 400);
     } catch (e: unknown) {
+      console.error("register error:", e);
+
+      // Firebase/Auth の代表的なエラーは code で分かるように表示
+      if (isAuthError(e)) {
+        if (e.code === "auth/email-already-in-use") {
+          setErrorText("このメールは既に使われています。ログインしてください。");
+          return;
+        }
+        setErrorText(`アカウント作成に失敗しました（${e.code}）。`);
+        return;
+      }
+
       const msg = e instanceof Error ? e.message : String(e);
 
       if (msg.includes("auth/email-already-in-use")) {
@@ -144,8 +183,7 @@ export default function RegisterPage() {
         return;
       }
 
-      setErrorText("アカウント作成に失敗しました。入力内容や通信状況をご確認ください。");
-      console.error("register error:", e);
+      setErrorText(`アカウント作成に失敗しました：${msg}`);
     } finally {
       setBusy(false);
     }
@@ -154,9 +192,20 @@ export default function RegisterPage() {
   return (
     <main className="min-h-dvh flex items-center justify-center bg-gray-50 dark:bg-gray-950">
       <div className="w-full max-w-sm rounded-2xl border bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
-        <h1 className="text-xl font-extrabold mb-2 text-gray-900 dark:text-gray-100">
-          住人アカウント作成
-        </h1>
+        <div className="mb-2 flex items-center justify-between">
+          <h1 className="text-xl font-extrabold text-gray-900 dark:text-gray-100">
+            住人アカウント作成
+          </h1>
+
+          <button
+            type="button"
+            onClick={() => router.back()}
+            disabled={busy}
+            className="rounded-lg px-3 py-2 text-sm font-extrabold text-gray-700 hover:bg-gray-100 disabled:opacity-50 dark:text-gray-200 dark:hover:bg-gray-800"
+          >
+            戻る
+          </button>
+        </div>
 
         {errorText && <div className="mb-3 text-sm text-red-600 font-bold">{errorText}</div>}
 
