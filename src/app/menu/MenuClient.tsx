@@ -147,7 +147,7 @@ export default function MenuClient() {
                          dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-900"
             >
               <div className="text-base font-extrabold text-gray-900 dark:text-gray-100">
-                掲示板（住人向けPDF）
+                掲示板
               </div>
               <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">
                 ReNova/ProclinkでアップしたPDF一覧
@@ -165,6 +165,19 @@ export default function MenuClient() {
               </div>
               <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">
                 Proclinkでセットアップした洗濯可否を表示
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/managers")}
+              className="w-full rounded-2xl border bg-white p-4 text-left hover:bg-gray-50
+                         dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-900"
+            >
+              <div className="text-base font-extrabold text-gray-900 dark:text-gray-100">
+                監督一覧
+              </div>
+              <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                現場監督の一覧を表示してDMできます
               </div>
             </button>
           </div>

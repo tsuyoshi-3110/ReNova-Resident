@@ -39,6 +39,7 @@ export default function RegisterPage() {
 
   // ✅ 入力はこれだけ
   const [name, setName] = useState("");
+  const [roomNo, setRoomNo] = useState("");
   const [shareCodeRaw, setShareCodeRaw] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -52,9 +53,14 @@ export default function RegisterPage() {
     setErrorText(null);
 
     const displayName = normalizeText(name);
+    const normalizedRoomNo = normalizeText(roomNo);
 
     if (!displayName) {
       setErrorText("名前を入力してください");
+      return;
+    }
+    if (!normalizedRoomNo) {
+      setErrorText("部屋番号を入力してください");
       return;
     }
     if (!shareCode) {
@@ -99,9 +105,16 @@ export default function RegisterPage() {
         return;
       }
 
-      // 2) projectName を確実に取得（shareCodesに無ければ projects を読む）
+      // 2) shareCodes に projectName があれば使う
       let projectName = typeof sc.projectName === "string" ? sc.projectName : "";
 
+      // 3) Auth 作成
+      const cred = await createUserWithEmailAndPassword(auth, mail, pass);
+
+      // 4) Firebase Auth の displayName を「名前」にする
+      await updateProfile(cred.user, { displayName });
+
+      // 4.5) projectName が無い時だけ、ログイン後に projects から読む
       if (!projectName) {
         const pRef = doc(db, "projects", projectId);
         const pSnap = await getDoc(pRef);
@@ -110,12 +123,6 @@ export default function RegisterPage() {
           projectName = typeof p.name === "string" ? p.name : "";
         }
       }
-
-      // 3) Auth 作成
-      const cred = await createUserWithEmailAndPassword(auth, mail, pass);
-
-      // 4) Firebase Auth の displayName を「名前」にする
-      await updateProfile(cred.user, { displayName });
 
       const uid = cred.user.uid;
 
@@ -126,6 +133,7 @@ export default function RegisterPage() {
           uid,
           email: mail,
           displayName,
+          roomNo: normalizedRoomNo,
 
           shareCode,
           projectId,
@@ -144,6 +152,7 @@ export default function RegisterPage() {
           uid,
           role: "resident",
           displayName,
+          roomNo: normalizedRoomNo,
 
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -217,6 +226,17 @@ export default function RegisterPage() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="例）山田 太郎"
+          disabled={busy}
+        />
+
+        <label className="block text-sm font-bold mb-1 text-gray-800 dark:text-gray-200">
+          部屋番号
+        </label>
+        <input
+          className="w-full mb-3 rounded-xl border px-3 py-2 dark:bg-gray-950 dark:text-gray-100 dark:border-gray-800"
+          value={roomNo}
+          onChange={(e) => setRoomNo(e.target.value)}
+          placeholder="例）101"
           disabled={busy}
         />
 

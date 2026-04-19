@@ -4,7 +4,15 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, query, where, orderBy } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+} from "firebase/firestore";
 
 import { auth, db } from "../lib/firebaseClient";
 
@@ -115,7 +123,9 @@ export default function BoardPage() {
         const snap = await getDocs(qy);
 
         const rows: Array<{ id: string; data: BoardPdf }> = [];
-        snap.forEach((d) => rows.push({ id: d.id, data: d.data() as BoardPdf }));
+        snap.forEach((d) =>
+          rows.push({ id: d.id, data: d.data() as BoardPdf }),
+        );
         setItems(rows);
       } catch (e) {
         console.log("board list error:", e);
@@ -137,7 +147,7 @@ export default function BoardPage() {
         <div className="flex items-center justify-between gap-2">
           <div>
             <div className="text-lg font-extrabold text-gray-900 dark:text-gray-100">
-              掲示板（住人用PDF）
+              掲示板
             </div>
             <div className="text-xs font-bold text-gray-500 dark:text-gray-400">
               工事：{member.projectName || "（名称未設定）"}
@@ -189,7 +199,9 @@ export default function BoardPage() {
                     {it.data.fileName || "PDF"}
                   </div>
                   <div className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
-                    {it.data.uploadedByEmail ? `by ${it.data.uploadedByEmail}` : ""}
+                    {it.data.uploadedByEmail
+                      ? `by ${it.data.uploadedByEmail}`
+                      : ""}
                   </div>
 
                   {!url && (
@@ -204,7 +216,8 @@ export default function BoardPage() {
         </div>
 
         <div className="mt-3 text-xs font-bold text-gray-500 dark:text-gray-400">
-          ※ PDFは標準ビューアで開きます。横向きに回転すると横で見れます。ピンチで拡大縮小できます。
+          ※
+          PDFは標準ビューアで開きます。横向きに回転すると横で見れます。ピンチで拡大縮小できます。
         </div>
       </div>
     </main>
