@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   collection,
   deleteDoc,
@@ -71,11 +71,10 @@ function countUnreadForMe(
 }
 
 export default function ManagersListPage() {
-  const sp = useSearchParams();
   const router = useRouter();
   const params = useParams<{ projectId: string }>();
 
-  const projectNameFromQuery = safeDecode(sp.get("projectName"));
+  const [projectNameFromQuery, setProjectNameFromQuery] = useState("");
 
   const routeProjectId = useMemo(() => {
     const raw = params?.projectId;
@@ -84,6 +83,12 @@ export default function ManagersListPage() {
 
   const [fallbackProjectId, setFallbackProjectId] = useState("");
   const [fallbackProjectName, setFallbackProjectName] = useState("");
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    setProjectNameFromQuery(safeDecode(params.get("projectName")));
+  }, []);
 
   const projectId = routeProjectId || fallbackProjectId;
   const projectName = projectNameFromQuery || fallbackProjectName;

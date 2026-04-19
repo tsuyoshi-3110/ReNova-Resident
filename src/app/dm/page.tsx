@@ -2,13 +2,14 @@
 "use client";
 
 import React, {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
@@ -163,16 +164,12 @@ function getRenderableMedia(m: DmMessage): {
   return { url: "", kind: null, name: "" };
 }
 
-export default function DmPage() {
+function DmPageInner() {
   const router = useRouter();
-  const sp = useSearchParams();
 
-  const projectId = useMemo(() => {
-    return toNonEmptyString(sp.get("projectId"));
-  }, [sp]);
-
-  const projectName = safeDecode(sp.get("projectName"));
-  const toUid = toNonEmptyString(sp.get("to"));
+  const [projectId, setProjectId] = useState("");
+  const [projectName, setProjectName] = useState("");
+  const [toUid, setToUid] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<ChatProfile | null>(null);
@@ -204,6 +201,15 @@ export default function DmPage() {
     const nextHeight = Math.min(el.scrollHeight, 160);
     el.style.height = `${nextHeight}px`;
     el.style.overflowY = el.scrollHeight > 160 ? "auto" : "hidden";
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    setProjectId(toNonEmptyString(params.get("projectId")));
+    setProjectName(safeDecode(params.get("projectName")));
+    setToUid(toNonEmptyString(params.get("to")));
   }, []);
 
   // 1) 自分プロフィール
@@ -767,5 +773,14 @@ export default function DmPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+
+export default function DmPage() {
+  return (
+    <Suspense fallback={null}>
+      <DmPageInner />
+    </Suspense>
   );
 }

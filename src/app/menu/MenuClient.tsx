@@ -150,7 +150,7 @@ export default function MenuClient() {
                 掲示板
               </div>
               <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                ReNova/ProclinkでアップしたPDF一覧
+                ProcNova/ProclinkでアップしたPDF一覧
               </div>
             </button>
 
