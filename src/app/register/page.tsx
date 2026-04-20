@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import {
   createUserWithEmailAndPassword,
@@ -36,6 +36,7 @@ type ProjectMeta = {
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // ✅ 入力はこれだけ
   const [name, setName] = useState("");
@@ -48,6 +49,11 @@ export default function RegisterPage() {
   const [errorText, setErrorText] = useState<string | null>(null);
 
   const shareCode = useMemo(() => normalizeCode(shareCodeRaw), [shareCodeRaw]);
+  useEffect(() => {
+    const code = normalizeCode(searchParams.get("code") || "");
+    if (!code) return;
+    setShareCodeRaw((prev) => (normalizeCode(prev) ? prev : code));
+  }, [searchParams]);
 
   async function register() {
     setErrorText(null);
@@ -246,8 +252,9 @@ export default function RegisterPage() {
         <input
           className="w-full mb-3 rounded-xl border px-3 py-2 dark:bg-gray-950 dark:text-gray-100 dark:border-gray-800"
           value={shareCodeRaw}
-          onChange={(e) => setShareCodeRaw(e.target.value)}
+          onChange={(e) => setShareCodeRaw(e.target.value.toUpperCase())}
           placeholder="例）B4WMSG"
+          autoComplete="off"
           disabled={busy}
         />
 
