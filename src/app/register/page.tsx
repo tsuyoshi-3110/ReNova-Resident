@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 import {
   createUserWithEmailAndPassword,
@@ -36,7 +36,6 @@ type ProjectMeta = {
 
 export default function RegisterPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
 
   // ✅ 入力はこれだけ
   const [name, setName] = useState("");
@@ -50,10 +49,14 @@ export default function RegisterPage() {
 
   const shareCode = useMemo(() => normalizeCode(shareCodeRaw), [shareCodeRaw]);
   useEffect(() => {
-    const code = normalizeCode(searchParams.get("code") || "");
+    if (typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    const code = normalizeCode(params.get("code") || "");
     if (!code) return;
+
     setShareCodeRaw((prev) => (normalizeCode(prev) ? prev : code));
-  }, [searchParams]);
+  }, []);
 
   async function register() {
     setErrorText(null);
