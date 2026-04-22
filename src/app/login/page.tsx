@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../lib/firebaseClient";
 
 export default function LoginPage() {
@@ -11,10 +11,13 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
 
   const login = async () => {
     setError(null);
+    setSuccess(null);
 
     if (!email || !password) {
       setError("メールとパスワードを入力してください");
@@ -34,6 +37,26 @@ export default function LoginPage() {
     }
   };
 
+  const resetPassword = async () => {
+    setError(null);
+    setSuccess(null);
+
+    if (!email) {
+      setError("先にメールアドレスを入力してください");
+      return;
+    }
+
+    try {
+      setResetBusy(true);
+      await sendPasswordResetEmail(auth, email);
+      setSuccess("パスワード再設定メールを送信しました。メールをご確認ください。");
+    } catch {
+      setError("再設定メールの送信に失敗しました");
+    } finally {
+      setResetBusy(false);
+    }
+  };
+
   return (
     <main className="min-h-dvh flex items-center justify-center bg-gray-50 dark:bg-gray-950">
       <div className="w-full max-w-sm rounded-2xl border bg-white p-6 dark:border-gray-800 dark:bg-gray-900">
@@ -42,6 +65,10 @@ export default function LoginPage() {
 
         {error && (
           <div className="mb-3 text-sm text-red-600 font-bold">{error}</div>
+        )}
+
+        {success && (
+          <div className="mb-3 text-sm text-green-600 font-bold">{success}</div>
         )}
 
         <input
@@ -61,10 +88,18 @@ export default function LoginPage() {
 
         <button
           onClick={login}
-          disabled={busy}
-          className="w-full rounded-xl bg-blue-600 py-2 text-white font-bold"
+          disabled={busy || resetBusy}
+          className="w-full rounded-xl bg-blue-600 py-2 text-white font-bold disabled:opacity-60"
         >
           {busy ? "ログイン中..." : "ログイン"}
+        </button>
+
+        <button
+          onClick={resetPassword}
+          disabled={busy || resetBusy}
+          className="mt-3 w-full text-sm text-blue-600 font-bold underline underline-offset-2 disabled:opacity-60"
+        >
+          {resetBusy ? "送信中..." : "パスワードを忘れた方はこちら"}
         </button>
 
         <button
