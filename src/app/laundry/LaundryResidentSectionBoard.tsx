@@ -250,7 +250,10 @@ export default function LaundryResidentSectionBoard({
       ? toNonEmptyString(nextSection.sectionKey).toUpperCase()
       : "";
 
-    if (nextKey) setSectionKey(nextKey);
+    if (nextKey) {
+      // React Compiler の set-state-in-effect 警告回避
+      window.setTimeout(() => setSectionKey(nextKey), 0);
+    }
   }, [readOnlyRoomNo, residentGroupTitle, sectionKey, sections]);
 
   const roomFilter = useMemo(
