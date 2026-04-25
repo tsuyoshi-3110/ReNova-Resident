@@ -133,6 +133,25 @@ export default function LaundryResidentSectionBoard({
     sectionKeyRef.current = sectionKey;
   }, [sectionKey]);
 
+  const dateInputRef = useRef<HTMLInputElement | null>(null);
+
+  const openDatePicker = () => {
+    const el = dateInputRef.current;
+    if (!el) return;
+
+    // Chrome / Edge / Android Chrome などでは、タップ時に明示的にピッカーを開く
+    if (typeof el.showPicker === "function") {
+      try {
+        el.showPicker();
+        return;
+      } catch {
+        // showPicker が許可されない環境では通常フォーカスにフォールバック
+      }
+    }
+
+    el.focus();
+  };
+
 
 
   // config
@@ -330,13 +349,19 @@ export default function LaundryResidentSectionBoard({
         </div>
 
         <div className="ml-auto flex items-center gap-3">
-          <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+          <button
+            type="button"
+            onClick={openDatePicker}
+            className="text-sm font-extrabold text-gray-900 dark:text-gray-100"
+          >
             日付
-          </div>
+          </button>
 
           <input
+            ref={dateInputRef}
             type="date"
             value={dateKey}
+            onClick={openDatePicker}
             onChange={(e) => {
               const v = e.target.value;
               if (!isDateKey(v)) return;
