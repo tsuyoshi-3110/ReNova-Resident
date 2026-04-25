@@ -230,6 +230,29 @@ export default function LaundryResidentSectionBoard({
     );
   }, [sections, sectionKey]);
 
+  // ✅ 住人画面では棟セレクトを表示しないため、sectionKey が空なら自動選択する
+  useEffect(() => {
+    if (!readOnlyRoomNo) return;
+    if (sectionKey.trim()) return;
+    if (!sections.length) return;
+
+    const residentSectionText = toNonEmptyString(residentGroupTitle).toUpperCase();
+    const matched = residentSectionText
+      ? sections.find((s) => {
+          const key = toNonEmptyString(s.sectionKey).toUpperCase();
+          const name = toNonEmptyString(s.sectionName).toUpperCase();
+          return key === residentSectionText || name === residentSectionText;
+        })
+      : null;
+
+    const nextSection = matched ?? (sections.length === 1 ? sections[0] : null);
+    const nextKey = nextSection
+      ? toNonEmptyString(nextSection.sectionKey).toUpperCase()
+      : "";
+
+    if (nextKey) setSectionKey(nextKey);
+  }, [readOnlyRoomNo, residentGroupTitle, sectionKey, sections]);
+
   const roomFilter = useMemo(
     () => normalizeRoomFilter(effectiveRoomFilterText),
     [effectiveRoomFilterText],
@@ -281,7 +304,7 @@ export default function LaundryResidentSectionBoard({
             <span className="px-1 py-2 text-sm font-extrabold text-gray-900 dark:text-gray-100">
               {selectedSection
                 ? `${toNonEmptyString(selectedSection.sectionName) || sectionKey || "未設定"}${sectionKey ? `（${sectionKey}）` : ""}`
-                : sectionKey || "未設定"}
+                : residentGroupTitle || sectionKey || "未設定"}
             </span>
           ) : (
             <select
