@@ -14,9 +14,9 @@ export function isDateKey(v: string): boolean {
 }
 
 export const STATUS_HELP: Record<LaundryStatus, string> = {
-  ok: "干してOK",
-  limited: "作業時間外はOK",
-  ng: "干さないで",
+  ok: "ご利用可能です",
+  limited: "作業時間外はご利用可能です",
+  ng: "ご利用できません",
 };
 
 export const STATUS_LABEL: Record<LaundryStatus, string> = {

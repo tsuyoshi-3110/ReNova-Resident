@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 
 import { auth, db } from "../lib/firebaseClient";
 import LaundryResidentSectionBoard from "./LaundryResidentSectionBoard";
@@ -38,6 +38,10 @@ type LaundryConfigDoc = {
 type OverallScheduleDoc = {
   holidayText?: string;
   rows?: OverallScheduleRow[];
+};
+
+type LaundryStatusDoc = {
+  workNotesByLabel?: Record<string, unknown>;
 };
 
 function todayYmdJst(): string {
@@ -208,6 +212,24 @@ function isActiveOnDate(row: OverallScheduleRow, ymd: string): boolean {
   return start <= ymd && ymd <= end;
 }
 
+function findWorkNoteByLabel(
+  notesByLabel: Record<string, string>,
+  rawLabel: unknown,
+): string {
+  const label = toNonEmptyString(rawLabel);
+  if (!label) return "";
+
+  const exact = notesByLabel[label];
+  if (exact) return exact;
+
+  const matched = Object.entries(notesByLabel).find(([key]) => {
+    const normalizedKey = toNonEmptyString(key);
+    return normalizedKey.includes(label) || label.includes(normalizedKey);
+  });
+
+  return matched?.[1] ?? "";
+}
+
 export default function LaundryClient() {
   const router = useRouter();
 
@@ -217,6 +239,7 @@ export default function LaundryClient() {
   const [residentGroupTitle, setResidentGroupTitle] = useState("");
   const [todayWorks, setTodayWorks] = useState<OverallScheduleRow[]>([]);
   const [todayWorksLoading, setTodayWorksLoading] = useState(false);
+  const [workNotesByLabel, setWorkNotesByLabel] = useState<Record<string, string>>({});
 
   const [selectedRoomNo, setSelectedRoomNo] = useState("");
   const [configRoomNo, setConfigRoomNo] = useState("");
@@ -376,10 +399,13 @@ export default function LaundryClient() {
             isRowForGroup(row, groupTitle) &&
             isActiveOnDate(row, selectedWorkDateYmd),
         );
+
         setTodayWorks(activeRows);
       } catch (e) {
         console.error("overall schedule selected date reload error:", e);
-        if (!cancelled) setTodayWorks([]);
+        if (!cancelled) {
+          setTodayWorks([]);
+        }
       } finally {
         if (!cancelled) setTodayWorksLoading(false);
       }
@@ -391,6 +417,46 @@ export default function LaundryClient() {
       cancelled = true;
     };
   }, [configGroupTitle, member, residentGroupTitle, selectedWorkDateYmd]);
+
+  useEffect(() => {
+    const projectId = toNonEmptyString(member?.projectId);
+    if (!projectId || !selectedWorkDateYmd) {
+      setWorkNotesByLabel({});
+      return;
+    }
+
+    const ref = doc(db, "projects", projectId, "laundryStatus", selectedWorkDateYmd);
+
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (!snap.exists()) {
+          setWorkNotesByLabel({});
+          return;
+        }
+
+        const data = snap.data() as LaundryStatusDoc;
+        const rawNotes = data.workNotesByLabel;
+        const nextNotes: Record<string, string> = {};
+
+        if (rawNotes && typeof rawNotes === "object") {
+          for (const [label, note] of Object.entries(rawNotes)) {
+            const labelText = toNonEmptyString(label);
+            const noteText = toNonEmptyString(note);
+            if (labelText && noteText) nextNotes[labelText] = noteText;
+          }
+        }
+
+        setWorkNotesByLabel(nextNotes);
+      },
+      (error) => {
+        console.error("laundryStatus notes snapshot error:", error);
+        setWorkNotesByLabel({});
+      },
+    );
+
+    return () => unsub();
+  }, [member?.projectId, selectedWorkDateYmd]);
 
   if (loading) {
     return (
@@ -463,7 +529,10 @@ export default function LaundryClient() {
             </div>
           ) : (
             <div className="mt-3 grid gap-2">
-              {todayWorks.map((row, idx) => (
+              {todayWorks.map((row, idx) => {
+                const note = findWorkNoteByLabel(workNotesByLabel, row.label);
+
+                return (
                 <div
                   key={`${row.groupTitle ?? "group"}-${row.label ?? "work"}-${idx}`}
                   className="rounded-xl border p-3 dark:border-gray-800"
@@ -481,45 +550,16 @@ export default function LaundryClient() {
                         {row.startYmd || "---- -- --"}〜
                         {row.endYmd || "---- -- --"}
                       </div>
-                      {row.label === "足場組立" ? (
+                      {note ? (
                         <div className="mt-2 rounded-lg border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-200">
-                          注意事項：作業中は音や埃が発生します。また、バルコニーでの洗濯物干しはできません。
-                        </div>
-                      ) : null}
-                      {row.label === "下地補修" ? (
-                        <div className="mt-2 rounded-lg border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-200">
-                          注意事項：ドリルでの穴あけ作業により、音や埃が発生する場合があります。
-                        </div>
-                      ) : null}
-                      {row.label === "シーリング" ? (
-                        <div className="mt-2 rounded-lg border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-200">
-                          注意事項：目地部分はシーリング材を施工した直後の可能性があります。触れないようご注意ください。
-                        </div>
-                      ) : null}
-                      {row.label === "塗装" ? (
-                        <div className="mt-2 rounded-lg border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-200">
-                          注意事項：塗装作業中は塗料のにおいが発生する場合があります。塗装箇所には触れないようご注意ください。
-                        </div>
-                      ) : null}
-                      {row.label === "防水" ? (
-                        <div className="mt-2 rounded-lg border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-200">
-                          注意事項：防水材の施工中はにおいが発生する場合があります。施工箇所には触れないようご注意ください。
-                        </div>
-                      ) : null}
-                      {row.label === "長尺シート" ? (
-                        <div className="mt-2 rounded-lg border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-200">
-                          注意事項：接着剤のにおいが発生する場合があります。
-                        </div>
-                      ) : null}
-                      {row.label === "足場解体" ? (
-                        <div className="mt-2 rounded-lg border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-200">
-                          注意事項：作業中は音や埃が発生します。また、安全確保のためバルコニー周辺には近づかないようご注意ください。
+                          注意事項：{note}
                         </div>
                       ) : null}
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
