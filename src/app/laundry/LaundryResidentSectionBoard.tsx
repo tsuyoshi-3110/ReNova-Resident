@@ -32,6 +32,9 @@ function todayKey(): string {
 
 type Props = {
   projectId: string;
+  initialRoomNo?: string;
+  readOnlyRoomNo?: boolean;
+  residentGroupTitle?: string;
 };
 
 function toNonEmptyString(v: unknown): string {
@@ -87,7 +90,12 @@ function normalizeRoomFilter(
   };
 }
 
-export default function LaundryResidentSectionBoard({ projectId }: Props) {
+export default function LaundryResidentSectionBoard({
+  projectId,
+  initialRoomNo = "",
+  readOnlyRoomNo = false,
+  residentGroupTitle = "",
+}: Props) {
   const validProjectId =
     typeof projectId === "string" && projectId.trim().length > 0;
 
@@ -109,10 +117,16 @@ export default function LaundryResidentSectionBoard({ projectId }: Props) {
 
   // ✅ 部屋番号フィルター（入力したらその部屋だけ表示）
   const [roomFilterText, setRoomFilterText] = useState<string>(() => {
+    const fixedRoomNo = toNonEmptyString(initialRoomNo);
+    if (fixedRoomNo) return fixedRoomNo;
     if (typeof window === "undefined") return "";
     const saved = window.localStorage.getItem(LS_KEY_ROOM_FILTER) ?? "";
     return saved;
   });
+  const fixedRoomNo = toNonEmptyString(initialRoomNo);
+  const effectiveRoomFilterText = readOnlyRoomNo
+    ? fixedRoomNo
+    : roomFilterText;
 
   const sectionKeyRef = useRef(sectionKey);
   useEffect(() => {
@@ -175,6 +189,7 @@ export default function LaundryResidentSectionBoard({ projectId }: Props) {
 
   // roomFilter persist（画面を離れても保持）
   useEffect(() => {
+    if (readOnlyRoomNo) return;
     if (typeof window === "undefined") return;
     const v = roomFilterText;
     if (v && v.trim().length > 0) {
@@ -182,7 +197,7 @@ export default function LaundryResidentSectionBoard({ projectId }: Props) {
     } else {
       window.localStorage.removeItem(LS_KEY_ROOM_FILTER);
     }
-  }, [roomFilterText]);
+  }, [readOnlyRoomNo, roomFilterText]);
 
   const sections = useMemo(() => config?.sections ?? [], [config]);
 
@@ -197,8 +212,8 @@ export default function LaundryResidentSectionBoard({ projectId }: Props) {
   }, [sections, sectionKey]);
 
   const roomFilter = useMemo(
-    () => normalizeRoomFilter(roomFilterText),
-    [roomFilterText],
+    () => normalizeRoomFilter(effectiveRoomFilterText),
+    [effectiveRoomFilterText],
   );
 
   if (!validProjectId) {
@@ -241,31 +256,81 @@ export default function LaundryResidentSectionBoard({ projectId }: Props) {
       {/* ✅ 操作（棟ピッカー + 日付 + 部屋フィルター） */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
         <div className="flex flex-wrap items-center gap-3">
+
+
+          {readOnlyRoomNo ? (
+            <span className="px-1 py-2 text-sm font-extrabold text-gray-900 dark:text-gray-100">
+              {selectedSection
+                ? `${toNonEmptyString(selectedSection.sectionName) || sectionKey || "未設定"}${sectionKey ? `（${sectionKey}）` : ""}`
+                : sectionKey || "未設定"}
+            </span>
+          ) : (
+            <select
+              value={sectionKey}
+              onChange={(e) => {
+                setSectionKey(e.target.value);
+              }}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900
+                         dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
+            >
+              <option value="">選択してください</option>
+              {sections.map((s) => {
+                const k = toNonEmptyString(s.sectionKey).toUpperCase();
+                const name = toNonEmptyString(s.sectionName) || k;
+                return (
+                  <option key={k} value={k}>
+                    {name}（{k}）
+                  </option>
+                );
+              })}
+            </select>
+          )}
+
+           <span className="px-1 py-2 text-sm font-extrabold text-gray-900 dark:text-gray-100">
+            {residentGroupTitle || "未設定"}
+          </span>
+
+
+          {readOnlyRoomNo ? (
+            <span className="px-1 py-2 text-sm font-extrabold text-gray-900 dark:text-gray-100">
+              {fixedRoomNo ? `${fixedRoomNo}号室` : "未設定"}
+            </span>
+          ) : (
+            <>
+              <input
+                value={roomFilterText}
+                onChange={(e) => setRoomFilterText(e.target.value)}
+                placeholder="例）305（空で全表示）"
+                className="w-42.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900
+                           dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
+              />
+
+              {roomFilterText && (
+                <button
+                  type="button"
+                  onClick={() => setRoomFilterText("")}
+                  className="rounded-xl border bg-white px-3 py-2 text-sm font-extrabold text-gray-900 hover:bg-gray-50
+                             dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-900"
+                >
+                  クリア
+                </button>
+              )}
+            </>
+          )}
+
+
+
+
+
+          {!exists && (
+            <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-extrabold text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200">
+              この日付のデータはありません
+            </span>
+          )}
+        </div>
+
+        <div className="ml-auto flex items-center gap-3">
           <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-            棟
-          </div>
-
-          <select
-            value={sectionKey}
-            onChange={(e) => {
-              setSectionKey(e.target.value);
-            }}
-            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900
-                       dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
-          >
-            <option value="">選択してください</option>
-            {sections.map((s) => {
-              const k = toNonEmptyString(s.sectionKey).toUpperCase();
-              const name = toNonEmptyString(s.sectionName) || k;
-              return (
-                <option key={k} value={k}>
-                  {name}（{k}）
-                </option>
-              );
-            })}
-          </select>
-
-          <div className="ml-2 text-sm font-extrabold text-gray-900 dark:text-gray-100">
             日付
           </div>
 
@@ -280,35 +345,6 @@ export default function LaundryResidentSectionBoard({ projectId }: Props) {
             className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900
                        dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
           />
-
-          <div className="ml-2 text-sm font-extrabold text-gray-900 dark:text-gray-100">
-            部屋番号
-          </div>
-
-          <input
-            value={roomFilterText}
-            onChange={(e) => setRoomFilterText(e.target.value)}
-            placeholder="例）305（空で全表示）"
-            className="w-42.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900
-                       dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
-          />
-
-          {roomFilterText && (
-            <button
-              type="button"
-              onClick={() => setRoomFilterText("")}
-              className="rounded-xl border bg-white px-3 py-2 text-sm font-extrabold text-gray-900 hover:bg-gray-50
-                         dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100 dark:hover:bg-gray-900"
-            >
-              クリア
-            </button>
-          )}
-
-          {!exists && (
-            <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-extrabold text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200">
-              この日付のデータはありません
-            </span>
-          )}
         </div>
       </div>
 
@@ -335,6 +371,8 @@ export default function LaundryResidentSectionBoard({ projectId }: Props) {
           </span>
         </div>
       </div>
+
+
 
       {/* ✅ ここが要点：最初は棟を選ぶまで表示しない */}
       {!sectionKey ? (

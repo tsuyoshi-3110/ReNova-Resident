@@ -24,18 +24,78 @@ type ResidentMember = {
   projectId?: string;
   projectName?: string | null;
   shareCode?: string;
+  sectionName?: string | null;
+  roomNo?: string | null;
 };
 
 type BoardPdf = {
   target?: string;
+  deliveryType?: "all" | "koku";
+  sectionName?: string;
+  kukus?: string[];
   url?: string;
   fileName?: string;
   uploadedByEmail?: string;
   createdAt?: unknown;
 };
 
+type LaundryConfigDoc = {
+  sections?: Array<{
+    sectionName?: string;
+    name?: string;
+    floors?: Array<{
+      roomKukus?: Record<string, unknown>;
+    }>;
+  }>;
+};
+
 function toNonEmptyString(v: unknown): string {
   return typeof v === "string" && v.trim() ? v.trim() : "";
+}
+
+function toStringArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((item) => toNonEmptyString(item))
+    .filter((item, index, arr) => item && arr.indexOf(item) === index);
+}
+
+function findResidentKoku(
+  config: unknown,
+  sectionName: string,
+  roomNo: string,
+): string {
+  if (typeof config !== "object" || config === null) return "";
+
+  const record = config as LaundryConfigDoc;
+  const sections = Array.isArray(record.sections) ? record.sections : [];
+  const normalizedSectionName = toNonEmptyString(sectionName);
+  const normalizedRoomNo = toNonEmptyString(roomNo);
+
+  if (!normalizedSectionName || !normalizedRoomNo) return "";
+
+  for (const section of sections) {
+    const currentSectionName = toNonEmptyString(
+      typeof section?.sectionName === "string"
+        ? section.sectionName
+        : typeof section?.name === "string"
+          ? section.name
+          : "",
+    );
+    if (currentSectionName !== normalizedSectionName) continue;
+
+    const floors = Array.isArray(section?.floors) ? section.floors : [];
+    for (const floor of floors) {
+      const roomKukus =
+        floor && typeof floor.roomKukus === "object" && floor.roomKukus !== null
+          ? floor.roomKukus
+          : {};
+      const koku = toNonEmptyString(roomKukus[normalizedRoomNo]);
+      if (koku) return koku;
+    }
+  }
+
+  return "";
 }
 
 export default function BoardPage() {
@@ -86,6 +146,8 @@ export default function BoardPage() {
           projectId,
           projectName: d.projectName ?? null,
           shareCode: d.shareCode,
+          sectionName: d.sectionName ?? null,
+          roomNo: d.roomNo ?? null,
         });
 
         setLoadingMember(false);
@@ -110,10 +172,27 @@ export default function BoardPage() {
         setBusy(true);
         setErrorText(null);
 
-        const colRef = collection(db, "projects", pid, "boardPdfs");
+        const residentSectionName = toNonEmptyString(member?.sectionName);
+        const residentRoomNo = toNonEmptyString(member?.roomNo);
 
-        // target == resident のみ
-        // createdAt があるなら orderBy（無いなら orderBy 行を消してOK）
+        let residentKoku = "";
+        if (residentSectionName && residentRoomNo) {
+          try {
+            const configRef = doc(db, "projects", pid, "laundry", "config");
+            const configSnap = await getDoc(configRef);
+            if (configSnap.exists()) {
+              residentKoku = findResidentKoku(
+                configSnap.data(),
+                residentSectionName,
+                residentRoomNo,
+              );
+            }
+          } catch (e) {
+            console.log("laundry config load error:", e);
+          }
+        }
+
+        const colRef = collection(db, "projects", pid, "boardPdfs");
         const qy = query(
           colRef,
           where("target", "==", "resident"),
@@ -126,7 +205,25 @@ export default function BoardPage() {
         snap.forEach((d) =>
           rows.push({ id: d.id, data: d.data() as BoardPdf }),
         );
-        setItems(rows);
+
+        const filtered = rows.filter((row) => {
+          const deliveryType = row.data.deliveryType === "koku" ? "koku" : "all";
+          if (deliveryType === "all") return true;
+
+          if (!residentSectionName || !residentRoomNo || !residentKoku) {
+            return true;
+          }
+
+          const pdfSectionName = toNonEmptyString(row.data.sectionName);
+          const pdfKukus = toStringArray(row.data.kukus);
+
+          return (
+            pdfSectionName === residentSectionName &&
+            pdfKukus.includes(residentKoku)
+          );
+        });
+
+        setItems(filtered);
       } catch (e) {
         console.log("board list error:", e);
         setErrorText("PDF一覧の取得に失敗しました。");
@@ -136,7 +233,7 @@ export default function BoardPage() {
     };
 
     void run();
-  }, [member?.projectId]);
+  }, [member?.projectId, member?.roomNo, member?.sectionName]);
 
   if (loadingMember) return null;
   if (!member) return null;

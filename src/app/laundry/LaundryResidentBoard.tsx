@@ -243,7 +243,7 @@ export default function LaundryResidentBoard({ projectId, roomKey }: Props) {
             />
 
             <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-extrabold text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200">
-              この日付のデータはありません
+              この日付の作業はありません
             </span>
           </div>
         </div>

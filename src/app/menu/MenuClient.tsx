@@ -23,12 +23,14 @@ export default function MenuClient() {
   const [loading, setLoading] = useState(true);
   const [member, setMember] = useState<ResidentMember | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [hasLaundryConfig, setHasLaundryConfig] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
       try {
         if (!user) {
           setMember(null);
+          setHasLaundryConfig(false);
           setLoading(false);
           router.replace("/login");
           return;
@@ -40,25 +42,40 @@ export default function MenuClient() {
 
         if (!snap.exists()) {
           setMember(null);
+          setHasLaundryConfig(false);
           setLoading(false);
           router.replace("/register");
           return;
         }
 
         const data = snap.data() as ResidentMember;
+        let laundryConfigExists = false;
 
         if (!data.projectId) {
           setMember(null);
+          setHasLaundryConfig(false);
           setLoading(false);
           router.replace("/register");
           return;
         }
 
+        const laundryConfigRef = doc(
+          db,
+          "projects",
+          data.projectId,
+          "laundry",
+          "config",
+        );
+        const laundryConfigSnap = await getDoc(laundryConfigRef);
+        laundryConfigExists = laundryConfigSnap.exists();
+
+        setHasLaundryConfig(laundryConfigExists);
         setMember({ ...data, uid: user.uid });
         setLoading(false);
       } catch (e) {
         console.error("residentMembers load error:", e);
         setMember(null);
+        setHasLaundryConfig(false);
         setLoading(false);
         router.replace("/login");
       }
@@ -123,8 +140,7 @@ export default function MenuClient() {
               </div>
 
               <div className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
-                部屋：{roomLabel || "（未設定）"}
-                {member.shareCode ? ` / shareCode: ${member.shareCode}` : ""}
+                {roomLabel ? `${roomLabel} 様` : "（未設定）"}
               </div>
             </div>
 
@@ -140,6 +156,18 @@ export default function MenuClient() {
           </div>
 
           <div className="mt-6 grid gap-3">
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => router.push("/account/edit")}
+                className="rounded-xl border bg-white px-3 py-2 text-left hover:bg-gray-50
+                           dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-900"
+              >
+                <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                  登録情報の編集
+                </div>
+              </button>
+            </div>
             <button
               type="button"
               onClick={() => router.push("/board")}
@@ -150,23 +178,25 @@ export default function MenuClient() {
                 掲示板
               </div>
               <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                ProcNova/ProclinkでアップしたPDF一覧
+                工事案内のPDF一覧
               </div>
             </button>
 
-            <button
-              type="button"
-              onClick={() => router.push("/laundry")}
-              className="w-full rounded-2xl border bg-white p-4 text-left hover:bg-gray-50
-                         dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-900"
-            >
-              <div className="text-base font-extrabold text-gray-900 dark:text-gray-100">
-                洗濯物情報
-              </div>
-              <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                Proclinkでセットアップした洗濯可否を表示
-              </div>
-            </button>
+            {hasLaundryConfig ? (
+              <button
+                type="button"
+                onClick={() => router.push("/laundry")}
+                className="w-full rounded-2xl border bg-white p-4 text-left hover:bg-gray-50
+                           dark:border-gray-800 dark:bg-gray-950 dark:hover:bg-gray-900"
+              >
+                <div className="text-base font-extrabold text-gray-900 dark:text-gray-100">
+                  バルコニーご利用状況
+                </div>
+                <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+                  バルコニーのご利用状況を確認できます
+                </div>
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => router.push("/managers")}
