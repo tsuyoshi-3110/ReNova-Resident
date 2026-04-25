@@ -34,6 +34,8 @@ type LaundryConfigDoc = {
   }>;
 };
 
+type LaundrySection = NonNullable<LaundryConfigDoc["sections"]>[number];
+
 type LaundrySectionOption = {
   sectionName: string;
 };
@@ -71,7 +73,7 @@ function parseLaundrySectionOptions(data: unknown): LaundrySectionOption[] {
 function findLaundrySection(
   data: unknown,
   sectionName: string,
-): LaundryConfigDoc["sections"] extends Array<infer T> ? T | null : null {
+): LaundrySection | null {
   if (typeof data !== "object" || data === null) return null;
 
   const record = data as LaundryConfigDoc;
