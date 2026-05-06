@@ -494,9 +494,7 @@ export default function LaundryClient() {
             戻る
           </button>
         </div>
-
-
-        {/* ✅ 新仕様：棟ピッカー → 選択した棟のボード表示 */}
+        {/* ボード表示 */}
         <LaundryResidentSectionBoard
           projectId={member.projectId}
           initialRoomNo={getRoomNoFromMember(member)}

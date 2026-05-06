@@ -12,6 +12,8 @@ import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db } from "../lib/firebaseClient";
 
+const FIXED_SECTION_NAME = "共通";
+
 function isAuthError(e: unknown): e is AuthError {
   return typeof e === "object" && e !== null && "code" in e;
 }
@@ -34,41 +36,6 @@ type ProjectMeta = {
   name?: string;
 };
 
-type LaundryConfigDoc = {
-  sections?: Array<{
-    sectionName?: string;
-    name?: string;
-  }>;
-};
-
-type LaundrySectionOption = {
-  sectionName: string;
-};
-
-function parseLaundrySectionOptions(data: unknown): LaundrySectionOption[] {
-  if (typeof data !== "object" || data === null) return [];
-
-  const record = data as LaundryConfigDoc;
-  const sections = Array.isArray(record.sections) ? record.sections : [];
-  const seen = new Set<string>();
-  const options: LaundrySectionOption[] = [];
-
-  sections.forEach((section) => {
-    const rawName =
-      typeof section?.sectionName === "string"
-        ? section.sectionName
-        : typeof section?.name === "string"
-          ? section.name
-          : "";
-    const sectionName = normalizeText(rawName);
-    if (!sectionName || seen.has(sectionName)) return;
-    seen.add(sectionName);
-    options.push({ sectionName });
-  });
-
-  return options;
-}
-
 export default function RegisterPage() {
   const router = useRouter();
 
@@ -78,10 +45,6 @@ export default function RegisterPage() {
   const [shareCodeRaw, setShareCodeRaw] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  const [resolvedProjectId, setResolvedProjectId] = useState("");
-  const [laundrySections, setLaundrySections] = useState<LaundrySectionOption[]>([]);
-  const [sectionName, setSectionName] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
@@ -96,57 +59,6 @@ export default function RegisterPage() {
 
     setShareCodeRaw((prev) => (normalizeCode(prev) ? prev : code));
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadLaundryConfig() {
-      setResolvedProjectId("");
-      setLaundrySections([]);
-      setSectionName("");
-
-      if (!shareCode) return;
-
-      try {
-        const scRef = doc(db, "shareCodes", shareCode);
-        const scSnap = await getDoc(scRef);
-        if (!scSnap.exists()) return;
-
-        const sc = scSnap.data() as ShareCodeDoc;
-        const projectId = typeof sc.projectId === "string" ? sc.projectId : "";
-        if (!projectId) return;
-
-        const configRef = doc(db, "projects", projectId, "laundry", "config");
-        const configSnap = await getDoc(configRef);
-        const options = configSnap.exists()
-          ? parseLaundrySectionOptions(configSnap.data())
-          : [];
-
-        if (cancelled) return;
-
-        setResolvedProjectId(projectId);
-        setLaundrySections(options);
-        setSectionName((prev) => {
-          if (!options.length) return "";
-          return options.some((option) => option.sectionName === prev)
-            ? prev
-            : options[0]?.sectionName ?? "";
-        });
-      } catch (e) {
-        if (cancelled) return;
-        console.error("load laundry config error:", e);
-        setResolvedProjectId("");
-        setLaundrySections([]);
-        setSectionName("");
-      }
-    }
-
-    void loadLaundryConfig();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [shareCode]);
 
   async function register() {
     setErrorText(null);
@@ -164,10 +76,6 @@ export default function RegisterPage() {
     }
     if (!shareCode) {
       setErrorText("シェアコードを入力してください");
-      return;
-    }
-    if (laundrySections.length > 0 && !normalizeText(sectionName)) {
-      setErrorText("棟名を選択してください");
       return;
     }
 
@@ -191,7 +99,9 @@ export default function RegisterPage() {
       const scSnap = await getDoc(scRef);
 
       if (!scSnap.exists()) {
-        setErrorText("シェアコードが見つかりません。管理者に確認してください。");
+        setErrorText(
+          "シェアコードが見つかりません。管理者に確認してください。",
+        );
         return;
       }
 
@@ -203,14 +113,14 @@ export default function RegisterPage() {
       }
 
       const projectId = typeof sc.projectId === "string" ? sc.projectId : "";
-      const normalizedSectionName = normalizeText(sectionName);
       if (!projectId) {
         setErrorText("シェアコードの設定が不完全です（projectIdなし）。");
         return;
       }
 
       // 2) shareCodes に projectName があれば使う
-      let projectName = typeof sc.projectName === "string" ? sc.projectName : "";
+      let projectName =
+        typeof sc.projectName === "string" ? sc.projectName : "";
 
       // 3) Auth 作成
       const cred = await createUserWithEmailAndPassword(auth, mail, pass);
@@ -242,7 +152,7 @@ export default function RegisterPage() {
           shareCode,
           projectId,
           projectName: projectName || null,
-          sectionName: normalizedSectionName || null,
+          sectionName: FIXED_SECTION_NAME,
 
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -258,7 +168,7 @@ export default function RegisterPage() {
           role: "resident",
           displayName,
           roomNo: normalizedRoomNo,
-          sectionName: normalizedSectionName || null,
+          sectionName: FIXED_SECTION_NAME,
 
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -284,7 +194,9 @@ export default function RegisterPage() {
       // Firebase/Auth の代表的なエラーは code で分かるように表示
       if (isAuthError(e)) {
         if (e.code === "auth/email-already-in-use") {
-          setErrorText("このメールは既に使われています。ログインしてください。");
+          setErrorText(
+            "このメールは既に使われています。ログインしてください。",
+          );
           return;
         }
         setErrorText(`アカウント作成に失敗しました（${e.code}）。`);
@@ -322,7 +234,9 @@ export default function RegisterPage() {
           </button>
         </div>
 
-        {errorText && <div className="mb-3 text-sm text-red-600 font-bold">{errorText}</div>}
+        {errorText && (
+          <div className="mb-3 text-sm text-red-600 font-bold">{errorText}</div>
+        )}
 
         <label className="block text-sm font-bold mb-1 text-gray-800 dark:text-gray-200">
           名前
@@ -357,25 +271,6 @@ export default function RegisterPage() {
           autoComplete="off"
           disabled={busy}
         />
-        {laundrySections.length > 0 && (
-          <>
-            <label className="block text-sm font-bold mb-1 text-gray-800 dark:text-gray-200">
-              棟名
-            </label>
-            <select
-              className="w-full mb-3 rounded-xl border px-3 py-2 dark:bg-gray-950 dark:text-gray-100 dark:border-gray-800"
-              value={sectionName}
-              onChange={(e) => setSectionName(e.target.value)}
-              disabled={busy}
-            >
-              {laundrySections.map((option) => (
-                <option key={option.sectionName} value={option.sectionName}>
-                  {option.sectionName}
-                </option>
-              ))}
-            </select>
-          </>
-        )}
 
         <label className="block text-sm font-bold mb-1 text-gray-800 dark:text-gray-200">
           メールアドレス

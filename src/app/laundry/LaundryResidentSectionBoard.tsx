@@ -11,7 +11,6 @@ import type {
 import {
   subscribeLaundryConfigByProject,
   subscribeLaundryStatusMapByProject,
-  subscribeProjectNameById,
 } from "./laundryFirestore";
 
 import {
@@ -23,7 +22,6 @@ import {
 } from "./utils";
 import StatusMark from "./StatusMark";
 
-const LS_KEY_SECTION = "laundry:selectedSectionKey";
 const LS_KEY_ROOM_FILTER = "laundry:roomFilterText";
 
 function todayKey(): string {
@@ -108,13 +106,6 @@ export default function LaundryResidentSectionBoard({
   const [exists, setExists] = useState<boolean>(false);
   const [map, setMap] = useState<Record<string, LaundryStatus>>({});
 
-  // ✅ 棟は前回選択を復元（画面を離れても保持）
-  const [sectionKey, setSectionKey] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-    const saved = window.localStorage.getItem(LS_KEY_SECTION) ?? "";
-    return saved.trim().toUpperCase();
-  });
-
   // ✅ 部屋番号フィルター（入力したらその部屋だけ表示）
   const [roomFilterText, setRoomFilterText] = useState<string>(() => {
     const fixedRoomNo = toNonEmptyString(initialRoomNo);
@@ -127,11 +118,6 @@ export default function LaundryResidentSectionBoard({
   const effectiveRoomFilterText = readOnlyRoomNo
     ? fixedRoomNo
     : roomFilterText;
-
-  const sectionKeyRef = useRef(sectionKey);
-  useEffect(() => {
-    sectionKeyRef.current = sectionKey;
-  }, [sectionKey]);
 
   const dateInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -160,19 +146,6 @@ export default function LaundryResidentSectionBoard({
 
     const unsub = subscribeLaundryConfigByProject(projectId, (c) => {
       setConfig(c);
-
-      // ✅ 設定変更などで「保存済みの棟キーが無効」になったらクリアする
-      const key = toNonEmptyString(sectionKeyRef.current).toUpperCase();
-      if (!key) return;
-
-      const sectionsNow = c?.sections ?? [];
-      const ok = sectionsNow.some(
-        (s) => toNonEmptyString(s.sectionKey).toUpperCase() === key,
-      );
-      if (!ok) {
-        // React warning回避（同期setStateを避ける）
-        window.setTimeout(() => setSectionKey(""), 0);
-      }
     });
 
     return () => unsub();
@@ -195,17 +168,6 @@ export default function LaundryResidentSectionBoard({
     return () => unsub();
   }, [projectId, validProjectId, dateKey]);
 
-  // sectionKey persist
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const k = sectionKey.trim().toUpperCase();
-    if (k) {
-      window.localStorage.setItem(LS_KEY_SECTION, k);
-    } else {
-      window.localStorage.removeItem(LS_KEY_SECTION);
-    }
-  }, [sectionKey]);
-
   // roomFilter persist（画面を離れても保持）
   useEffect(() => {
     if (readOnlyRoomNo) return;
@@ -221,40 +183,23 @@ export default function LaundryResidentSectionBoard({
   const sections = useMemo(() => config?.sections ?? [], [config]);
 
   const selectedSection = useMemo(() => {
-    const key = toNonEmptyString(sectionKey).toUpperCase();
-    if (!key) return null;
-    return (
-      sections.find(
-        (s) => toNonEmptyString(s.sectionKey).toUpperCase() === key,
-      ) ?? null
-    );
-  }, [sections, sectionKey]);
+    if (!sections.length) return null;
 
-  // ✅ 住人画面では棟セレクトを表示しないため、sectionKey が空なら自動選択する
-  useEffect(() => {
-    if (!readOnlyRoomNo) return;
-    if (sectionKey.trim()) return;
-    if (!sections.length) return;
-
-    const residentSectionText = toNonEmptyString(residentGroupTitle).toUpperCase();
-    const matched = residentSectionText
-      ? sections.find((s) => {
-          const key = toNonEmptyString(s.sectionKey).toUpperCase();
-          const name = toNonEmptyString(s.sectionName).toUpperCase();
-          return key === residentSectionText || name === residentSectionText;
-        })
-      : null;
-
-    const nextSection = matched ?? (sections.length === 1 ? sections[0] : null);
-    const nextKey = nextSection
-      ? toNonEmptyString(nextSection.sectionKey).toUpperCase()
-      : "";
-
-    if (nextKey) {
-      // React Compiler の set-state-in-effect 警告回避
-      window.setTimeout(() => setSectionKey(nextKey), 0);
+    const roomNo = toNonEmptyString(effectiveRoomFilterText);
+    if (roomNo) {
+      const hit = sections.find((s) => {
+        const floors = Array.isArray(s.floors) ? s.floors : [];
+        return floors.some((f) => {
+          const roomNos = Array.isArray(f.roomNos) ? f.roomNos : [];
+          return roomNos.some((n) => String(n) === roomNo);
+        });
+      });
+      if (hit) return hit;
     }
-  }, [readOnlyRoomNo, residentGroupTitle, sectionKey, sections]);
+
+    if (sections.length === 1) return sections[0];
+    return sections[0];
+  }, [effectiveRoomFilterText, sections]);
 
   const roomFilter = useMemo(
     () => normalizeRoomFilter(effectiveRoomFilterText),
@@ -290,7 +235,17 @@ export default function LaundryResidentSectionBoard({
     return (
       <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
         <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-          棟情報（sections）が空です。管理側の設定を確認してください。
+          設定情報（sections）が空です。管理側の設定を確認してください。
+        </div>
+      </div>
+    );
+  }
+
+  if (!selectedSection) {
+    return (
+      <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950">
+        <div className="text-sm font-extrabold text-amber-800 dark:text-amber-200">
+          設定が見つかりません。管理側の設定を確認してください。
         </div>
       </div>
     );
@@ -298,42 +253,15 @@ export default function LaundryResidentSectionBoard({
 
   return (
     <div className="space-y-3">
-      {/* ✅ 操作（棟ピッカー + 日付 + 部屋フィルター） */}
+      {/* 操作（日付 + 部屋フィルター） */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
         <div className="flex flex-wrap items-center gap-3">
 
-
-          {readOnlyRoomNo ? (
+          {residentGroupTitle ? (
             <span className="px-1 py-2 text-sm font-extrabold text-gray-900 dark:text-gray-100">
-              {selectedSection
-                ? `${toNonEmptyString(selectedSection.sectionName) || sectionKey || "未設定"}${sectionKey ? `（${sectionKey}）` : ""}`
-                : residentGroupTitle || sectionKey || "未設定"}
+              {residentGroupTitle}
             </span>
-          ) : (
-            <select
-              value={sectionKey}
-              onChange={(e) => {
-                setSectionKey(e.target.value);
-              }}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900
-                         dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
-            >
-              <option value="">選択してください</option>
-              {sections.map((s) => {
-                const k = toNonEmptyString(s.sectionKey).toUpperCase();
-                const name = toNonEmptyString(s.sectionName) || k;
-                return (
-                  <option key={k} value={k}>
-                    {name}（{k}）
-                  </option>
-                );
-              })}
-            </select>
-          )}
-
-           <span className="px-1 py-2 text-sm font-extrabold text-gray-900 dark:text-gray-100">
-            {residentGroupTitle || "未設定"}
-          </span>
+          ) : null}
 
 
           {readOnlyRoomNo ? (
@@ -423,27 +351,8 @@ export default function LaundryResidentSectionBoard({
         </div>
       </div>
 
-
-
-      {/* ✅ ここが要点：最初は棟を選ぶまで表示しない */}
-      {!sectionKey ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-          <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-            まず棟を選択してください。
-          </div>
-        </div>
-      ) : !exists ? null : !selectedSection ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950">
-          <div className="text-sm font-extrabold text-amber-800 dark:text-amber-200">
-            選択中の棟が見つかりません。設定を確認してください。
-          </div>
-        </div>
-      ) : (
-        <SectionBoard
-          section={selectedSection}
-          map={map}
-          roomFilter={roomFilter}
-        />
+      {!exists ? null : (
+        <SectionBoard section={selectedSection} map={map} roomFilter={roomFilter} />
       )}
     </div>
   );
@@ -505,12 +414,6 @@ function SectionBoard({
 
   return (
     <div className="space-y-2">
-      <div className="rounded-2xl border border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900">
-        <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-          {section.sectionName}（{sectionKey}）
-        </div>
-      </div>
-
       {/* ✅ フィルター表示 */}
       {roomFilter ? (
         filteredHit?.room ? (
@@ -526,7 +429,7 @@ function SectionBoard({
                   <div
                     className="min-w-11.5 rounded-2xl border border-gray-200 bg-white p-3 text-center
                                dark:border-gray-800 dark:bg-gray-950"
-                    title={`${section.sectionName} / ${filteredHit.floor}F / ${filteredHit.room.label}号室 / ${STATUS_HELP[status]}`}
+                    title={`${filteredHit.floor}F / ${filteredHit.room.label}号室 / ${STATUS_HELP[status]}`}
                   >
                     <div className="text-xs font-bold text-gray-600 dark:text-gray-300">
                       {filteredHit.room.label}
@@ -548,7 +451,7 @@ function SectionBoard({
         ) : (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950">
             <div className="text-sm font-extrabold text-amber-800 dark:text-amber-200">
-              入力した部屋番号がこの棟の設定に見つかりません。
+              入力した部屋番号が設定に見つかりません。
             </div>
             <div className="mt-2 text-sm text-amber-700 dark:text-amber-200/80">
               例：305 のように数字だけで入力してください。
@@ -589,7 +492,7 @@ function SectionBoard({
                       <div
                         key={r.id}
                         className="min-w-11.5 rounded-xl border border-gray-200 bg-white p-1 text-center dark:border-gray-800 dark:bg-gray-900"
-                        title={`${section.sectionName} / ${f.floor}F / ${r.label}号室 / ${STATUS_HELP[status]}`}
+                        title={`${f.floor}F / ${r.label}号室 / ${STATUS_HELP[status]}`}
                       >
                         <div className="text-[10px] font-bold text-gray-600 dark:text-gray-300">
                           {r.label}

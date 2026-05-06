@@ -25,8 +25,6 @@ type ResidentMember = {
 
 type LaundryConfigDoc = {
   sections?: Array<{
-    sectionName?: string;
-    name?: string;
     floors?: Array<{
       roomNos?: unknown[];
       roomKukus?: Record<string, unknown>;
@@ -34,99 +32,40 @@ type LaundryConfigDoc = {
   }>;
 };
 
-type LaundrySection = NonNullable<LaundryConfigDoc["sections"]>[number];
-
-type LaundrySectionOption = {
-  sectionName: string;
-};
-
 function normalizeText(v: string | null | undefined): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
-function parseLaundrySectionOptions(data: unknown): LaundrySectionOption[] {
-  if (typeof data !== "object" || data === null) return [];
+function roomExistsInLaundryConfig(data: unknown, roomNo: string): boolean {
+  if (typeof data !== "object" || data === null) return false;
 
   const record = data as LaundryConfigDoc;
   const sections = Array.isArray(record.sections) ? record.sections : [];
-  const seen = new Set<string>();
-  const options: LaundrySectionOption[] = [];
-
-  sections.forEach((section) => {
-    const rawName =
-      typeof section?.sectionName === "string"
-        ? section.sectionName
-        : typeof section?.name === "string"
-          ? section.name
-          : "";
-
-    const sectionName = normalizeText(rawName);
-    if (!sectionName || seen.has(sectionName)) return;
-
-    seen.add(sectionName);
-    options.push({ sectionName });
-  });
-
-  return options;
-}
-
-function findLaundrySection(
-  data: unknown,
-  sectionName: string,
-): LaundrySection | null {
-  if (typeof data !== "object" || data === null) return null;
-
-  const record = data as LaundryConfigDoc;
-  const sections = Array.isArray(record.sections) ? record.sections : [];
-  const normalizedSectionName = normalizeText(sectionName);
-
-  for (const section of sections) {
-    const currentSectionName = normalizeText(
-      typeof section?.sectionName === "string"
-        ? section.sectionName
-        : typeof section?.name === "string"
-          ? section.name
-          : "",
-    );
-    if (currentSectionName === normalizedSectionName) {
-      return section;
-    }
-  }
-
-  return null;
-}
-
-function roomExistsInLaundrySection(
-  data: unknown,
-  sectionName: string,
-  roomNo: string,
-): boolean {
-  const section = findLaundrySection(data, sectionName);
-  if (!section) return false;
-
   const normalizedRoomNo = normalizeText(roomNo);
   if (!normalizedRoomNo) return false;
 
-  const floors = Array.isArray(section.floors) ? section.floors : [];
+  for (const section of sections) {
+    const floors = Array.isArray(section?.floors) ? section.floors : [];
 
-  for (const floor of floors) {
-    const roomNos = Array.isArray(floor?.roomNos)
-      ? floor.roomNos
-          .map((room) => normalizeText(typeof room === "string" ? room : ""))
-          .filter(Boolean)
-      : [];
+    for (const floor of floors) {
+      const roomNos = Array.isArray(floor?.roomNos)
+        ? floor.roomNos
+            .map((room) => normalizeText(typeof room === "string" ? room : String(room)))
+            .filter(Boolean)
+        : [];
 
-    if (roomNos.includes(normalizedRoomNo)) {
-      return true;
-    }
+      if (roomNos.includes(normalizedRoomNo)) {
+        return true;
+      }
 
-    const roomKukus =
-      floor && typeof floor.roomKukus === "object" && floor.roomKukus !== null
-        ? floor.roomKukus
-        : {};
+      const roomKukus =
+        floor && typeof floor.roomKukus === "object" && floor.roomKukus !== null
+          ? floor.roomKukus
+          : {};
 
-    if (normalizeText(roomKukus[normalizedRoomNo] as string) || normalizedRoomNo in roomKukus) {
-      return true;
+      if (normalizeText(roomKukus[normalizedRoomNo] as string) || normalizedRoomNo in roomKukus) {
+        return true;
+      }
     }
   }
 
@@ -142,9 +81,6 @@ export default function AccountEditPage() {
 
   const [displayName, setDisplayName] = useState("");
   const [roomNo, setRoomNo] = useState("");
-  const [sectionName, setSectionName] = useState("");
-
-  const [laundrySections, setLaundrySections] = useState<LaundrySectionOption[]>([]);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [successText, setSuccessText] = useState<string | null>(null);
   const [laundryConfigData, setLaundryConfigData] = useState<unknown>(null);
@@ -177,39 +113,21 @@ export default function AccountEditPage() {
         setMember(nextMember);
         setDisplayName(normalizeText(nextMember.displayName));
         setRoomNo(normalizeText(nextMember.roomNo));
-        setSectionName(normalizeText(nextMember.sectionName));
 
         const projectId = normalizeText(nextMember.projectId);
         if (projectId) {
           const configRef = doc(db, "projects", projectId, "laundry", "config");
           const configSnap = await getDoc(configRef);
           const configData = configSnap.exists() ? configSnap.data() : null;
-          const options = configData
-            ? parseLaundrySectionOptions(configData)
-            : [];
-
           setLaundryConfigData(configData);
-          setLaundrySections(options);
-
-          setSectionName((prev) => {
-            if (!options.length) return normalizeText(nextMember.sectionName);
-            if (options.some((option) => option.sectionName === prev)) return prev;
-            return options.some(
-              (option) => option.sectionName === normalizeText(nextMember.sectionName),
-            )
-              ? normalizeText(nextMember.sectionName)
-              : options[0]?.sectionName ?? "";
-          });
         } else {
           setLaundryConfigData(null);
-          setLaundrySections([]);
         }
 
         setLoading(false);
       } catch (e) {
         console.error("account edit load error:", e);
         setLaundryConfigData(null);
-        setLaundrySections([]);
         setErrorText("登録情報の取得に失敗しました。");
         setLoading(false);
       }
@@ -218,23 +136,13 @@ export default function AccountEditPage() {
     return () => unsub();
   }, [router]);
 
-  const hasLaundryConfig = laundrySections.length > 0;
+  const hasLaundryConfig = Boolean(laundryConfigData);
   const normalizedRoomNo = useMemo(() => normalizeText(roomNo), [roomNo]);
   const normalizedDisplayName = useMemo(() => normalizeText(displayName), [displayName]);
-  const normalizedSectionName = useMemo(() => normalizeText(sectionName), [sectionName]);
-  const roomExistsInSelectedSection = useMemo(() => {
-    if (!hasLaundryConfig || !normalizedSectionName || !normalizedRoomNo) return true;
-    return roomExistsInLaundrySection(
-      laundryConfigData,
-      normalizedSectionName,
-      normalizedRoomNo,
-    );
-  }, [
-    hasLaundryConfig,
-    laundryConfigData,
-    normalizedSectionName,
-    normalizedRoomNo,
-  ]);
+  const roomExistsInConfig = useMemo(() => {
+    if (!hasLaundryConfig || !normalizedRoomNo) return true;
+    return roomExistsInLaundryConfig(laundryConfigData, normalizedRoomNo);
+  }, [hasLaundryConfig, laundryConfigData, normalizedRoomNo]);
 
   async function handleSave() {
     if (!member?.uid) return;
@@ -252,13 +160,8 @@ export default function AccountEditPage() {
       return;
     }
 
-    if (hasLaundryConfig && !normalizedSectionName) {
-      setErrorText("棟名を選択してください。");
-      return;
-    }
-
-    if (hasLaundryConfig && !roomExistsInSelectedSection) {
-      setErrorText("選択した棟にその号室は存在しません。");
+    if (hasLaundryConfig && !roomExistsInConfig) {
+      setErrorText("入力した号室が設定に見つかりません。");
       return;
     }
 
@@ -273,7 +176,6 @@ export default function AccountEditPage() {
         {
           displayName: normalizedDisplayName,
           roomNo: normalizedRoomNo,
-          sectionName: hasLaundryConfig ? normalizedSectionName || null : null,
           updatedAt: serverTimestamp(),
         },
         { merge: true },
@@ -285,7 +187,6 @@ export default function AccountEditPage() {
           {
             displayName: normalizedDisplayName,
             roomNo: normalizedRoomNo,
-            sectionName: hasLaundryConfig ? normalizedSectionName || null : null,
             updatedAt: serverTimestamp(),
           },
           { merge: true },
@@ -298,7 +199,6 @@ export default function AccountEditPage() {
               ...prev,
               displayName: normalizedDisplayName,
               roomNo: normalizedRoomNo,
-              sectionName: hasLaundryConfig ? normalizedSectionName || null : null,
             }
           : prev,
       );
@@ -338,7 +238,7 @@ export default function AccountEditPage() {
                 登録情報の編集
               </div>
               <div className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-                棟名や号室などの登録情報を修正できます
+                号室などの登録情報を修正できます
               </div>
             </div>
 
@@ -385,35 +285,9 @@ export default function AccountEditPage() {
               placeholder="例）303"
               disabled={saving}
             />
-            {hasLaundryConfig && normalizedSectionName && normalizedRoomNo && !roomExistsInSelectedSection && (
+            {hasLaundryConfig && normalizedRoomNo && !roomExistsInConfig && (
               <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-300">
-                選択した棟にその号室は存在しません。
-              </div>
-            )}
-
-            {hasLaundryConfig && (
-              <>
-                <label className="mb-1 block text-sm font-bold text-gray-800 dark:text-gray-200">
-                  棟名
-                </label>
-                <select
-                  className="mb-3 w-full rounded-xl border px-3 py-2 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-100"
-                  value={sectionName}
-                  onChange={(e) => setSectionName(e.target.value)}
-                  disabled={saving}
-                >
-                  {laundrySections.map((option) => (
-                    <option key={option.sectionName} value={option.sectionName}>
-                      {option.sectionName}
-                    </option>
-                  ))}
-                </select>
-              </>
-            )}
-
-            {!hasLaundryConfig && (
-              <div className="mb-3 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
-                現在は棟設定が未作成のため、棟名の選択はまだできません。
+                入力した号室が設定に見つかりません。
               </div>
             )}
 

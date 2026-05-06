@@ -24,7 +24,6 @@ type ResidentMember = {
   projectId?: string;
   projectName?: string | null;
   shareCode?: string;
-  sectionName?: string | null;
   roomNo?: string | null;
 };
 
@@ -39,10 +38,19 @@ type BoardPdf = {
   createdAt?: unknown;
 };
 
+type ResidentMessage = {
+  text?: string;
+  createdAt?: unknown;
+  createdBy?: string;
+  targetScope?: "all" | "group";
+  targetGroupTitle?: string | null;
+  templateId?: string | null;
+  templateTitle?: string | null;
+  updatedAt?: unknown;
+};
+
 type LaundryConfigDoc = {
   sections?: Array<{
-    sectionName?: string;
-    name?: string;
     floors?: Array<{
       roomKukus?: Record<string, unknown>;
     }>;
@@ -60,30 +68,36 @@ function toStringArray(v: unknown): string[] {
     .filter((item, index, arr) => item && arr.indexOf(item) === index);
 }
 
+function formatDateTime(v: unknown): string {
+  if (typeof v !== "object" || v === null) return "";
+
+  const maybeTimestamp = v as { toDate?: unknown };
+  if (typeof maybeTimestamp.toDate !== "function") return "";
+
+  const date = maybeTimestamp.toDate();
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("ja-JP", {
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
 function findResidentKoku(
   config: unknown,
-  sectionName: string,
   roomNo: string,
 ): string {
   if (typeof config !== "object" || config === null) return "";
 
   const record = config as LaundryConfigDoc;
   const sections = Array.isArray(record.sections) ? record.sections : [];
-  const normalizedSectionName = toNonEmptyString(sectionName);
   const normalizedRoomNo = toNonEmptyString(roomNo);
 
-  if (!normalizedSectionName || !normalizedRoomNo) return "";
+  if (!normalizedRoomNo) return "";
 
   for (const section of sections) {
-    const currentSectionName = toNonEmptyString(
-      typeof section?.sectionName === "string"
-        ? section.sectionName
-        : typeof section?.name === "string"
-          ? section.name
-          : "",
-    );
-    if (currentSectionName !== normalizedSectionName) continue;
-
     const floors = Array.isArray(section?.floors) ? section.floors : [];
     for (const floor of floors) {
       const roomKukus =
@@ -106,6 +120,9 @@ export default function BoardPage() {
 
   const [errorText, setErrorText] = useState<string | null>(null);
   const [items, setItems] = useState<Array<{ id: string; data: BoardPdf }>>([]);
+  const [messageItems, setMessageItems] = useState<
+    Array<{ id: string; data: ResidentMessage }>
+  >([]);
   const [busy, setBusy] = useState(true);
 
   // 1) Auth → residentMembers を取得（projectId を確定）
@@ -146,7 +163,6 @@ export default function BoardPage() {
           projectId,
           projectName: d.projectName ?? null,
           shareCode: d.shareCode,
-          sectionName: d.sectionName ?? null,
           roomNo: d.roomNo ?? null,
         });
 
@@ -162,7 +178,7 @@ export default function BoardPage() {
     return () => unsub();
   }, [router]);
 
-  // 2) projectId が確定したら boardPdfs を取得
+  // 2) projectId が確定したら boardPdfs と residentMessages を取得
   useEffect(() => {
     const run = async () => {
       const pid = member?.projectId;
@@ -172,18 +188,16 @@ export default function BoardPage() {
         setBusy(true);
         setErrorText(null);
 
-        const residentSectionName = toNonEmptyString(member?.sectionName);
         const residentRoomNo = toNonEmptyString(member?.roomNo);
 
         let residentKoku = "";
-        if (residentSectionName && residentRoomNo) {
+        if (residentRoomNo) {
           try {
             const configRef = doc(db, "projects", pid, "laundry", "config");
             const configSnap = await getDoc(configRef);
             if (configSnap.exists()) {
               residentKoku = findResidentKoku(
                 configSnap.data(),
-                residentSectionName,
                 residentRoomNo,
               );
             }
@@ -210,37 +224,60 @@ export default function BoardPage() {
           const deliveryType = row.data.deliveryType === "koku" ? "koku" : "all";
           if (deliveryType === "all") return true;
 
-          if (!residentSectionName || !residentRoomNo || !residentKoku) {
+          if (!residentRoomNo || !residentKoku) {
             return true;
           }
 
-          const pdfSectionName = toNonEmptyString(row.data.sectionName);
           const pdfKukus = toStringArray(row.data.kukus);
 
-          return (
-            pdfSectionName === residentSectionName &&
-            pdfKukus.includes(residentKoku)
-          );
+          return pdfKukus.includes(residentKoku);
         });
 
         setItems(filtered);
+
+        const messageColRef = collection(db, "projects", pid, "residentMessages");
+        const messageQy = query(messageColRef, orderBy("createdAt", "desc"));
+        const messageSnap = await getDocs(messageQy);
+
+        const messageRows: Array<{ id: string; data: ResidentMessage }> = [];
+        messageSnap.forEach((d) =>
+          messageRows.push({ id: d.id, data: d.data() as ResidentMessage }),
+        );
+
+        const filteredMessages = messageRows.filter((row) => {
+          const scope = row.data.targetScope === "group" ? "group" : "all";
+          if (scope === "all") return true;
+
+          if (!residentRoomNo || !residentKoku) {
+            return true;
+          }
+
+          const targetGroupTitle = toNonEmptyString(row.data.targetGroupTitle);
+          if (!targetGroupTitle) return true;
+
+          return targetGroupTitle === residentKoku;
+        });
+
+        setMessageItems(filteredMessages);
       } catch (e) {
         console.log("board list error:", e);
         setErrorText("PDF一覧の取得に失敗しました。");
+        setItems([]);
+        setMessageItems([]);
       } finally {
         setBusy(false);
       }
     };
 
     void run();
-  }, [member?.projectId, member?.roomNo, member?.sectionName]);
+  }, [member?.projectId, member?.roomNo]);
 
   if (loadingMember) return null;
   if (!member) return null;
 
   return (
     <main className="min-h-dvh bg-gray-50 dark:bg-gray-950">
-      <div className="mx-auto w-full max-w-md px-4 py-10">
+      <div className="mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8 lg:py-10">
         <div className="flex items-center justify-between gap-2">
           <div>
             <div className="text-lg font-extrabold text-gray-900 dark:text-gray-100">
@@ -267,7 +304,7 @@ export default function BoardPage() {
           </div>
         )}
 
-        <div className="mt-6 grid gap-3">
+        <div className="mt-6 grid w-full grid-cols-1 gap-3">
           {busy ? (
             <div className="rounded-2xl border bg-white p-4 text-sm font-bold text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
               読み込み中...
@@ -286,10 +323,9 @@ export default function BoardPage() {
                   disabled={!url}
                   onClick={() => {
                     if (!url) return;
-                    // ✅ 同タブで直接PDFを開く（Safari/Chrome標準ビューア）
                     window.location.assign(url);
                   }}
-                  className="rounded-2xl border bg-white p-4 text-left hover:bg-gray-50 disabled:opacity-60
+                  className="min-h-[96px] w-full rounded-2xl border bg-white p-4 text-left hover:bg-gray-50 disabled:opacity-60 sm:p-5 lg:min-h-[120px]
                              dark:border-gray-800 dark:bg-gray-900 dark:hover:bg-gray-900/70"
                 >
                   <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
@@ -316,6 +352,68 @@ export default function BoardPage() {
           ※
           PDFは標準ビューアで開きます。横向きに回転すると横で見れます。ピンチで拡大縮小できます。
         </div>
+
+        <section className="mt-8">
+          <div className="mb-3">
+            <div className="text-base font-extrabold text-gray-900 dark:text-gray-100">
+              お知らせメッセージ
+            </div>
+            <div className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
+              全体向けと該当工区向けのお知らせを表示します。
+            </div>
+          </div>
+
+          <div className="grid w-full grid-cols-1 gap-3">
+            {busy ? (
+              <div className="rounded-2xl border bg-white p-4 text-sm font-bold text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                読み込み中...
+              </div>
+            ) : messageItems.length === 0 ? (
+              <div className="rounded-2xl border bg-white p-4 text-sm font-bold text-gray-700 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200">
+                お知らせメッセージはまだありません。
+              </div>
+            ) : (
+              messageItems.map((it) => {
+                const text = toNonEmptyString(it.data.text);
+                const createdAtText = formatDateTime(it.data.createdAt);
+                const templateTitle = toNonEmptyString(it.data.templateTitle);
+                const targetGroupTitle = toNonEmptyString(
+                  it.data.targetGroupTitle,
+                );
+                const isGroup =
+                  it.data.targetScope === "group" && Boolean(targetGroupTitle);
+
+                return (
+                  <article
+                    key={it.id}
+                    className="min-h-[180px] w-full rounded-2xl border bg-white p-4 text-left dark:border-gray-800 dark:bg-gray-900 sm:p-5 lg:min-h-[220px]"
+                  >
+                    <div className="mb-2 flex flex-wrap gap-2 text-xs font-extrabold">
+                      <span className="rounded-full bg-gray-100 px-2 py-1 text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+                        {isGroup ? `${targetGroupTitle}向け` : "全体向け"}
+                      </span>
+                      {templateTitle && (
+                        <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700 dark:bg-blue-950/50 dark:text-blue-200">
+                          {templateTitle}
+                        </span>
+                      )}
+                    </div>
+
+                    {createdAtText && (
+                      <div className="mb-2 text-xs font-bold text-gray-500 dark:text-gray-400">
+                        {createdAtText}
+                      </div>
+                    )}
+
+                    <p className="whitespace-pre-line text-sm font-semibold leading-7 text-gray-900 dark:text-gray-100 sm:text-base sm:leading-8">
+                      {text || "本文がありません。"}
+                    </p>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        </section>
       </div>
     </main>
   );

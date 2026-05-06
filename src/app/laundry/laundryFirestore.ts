@@ -23,7 +23,7 @@ export type LaundryFloorDef = {
 
 export type LaundrySectionDef = {
   sectionKey: string; // "A" "B" "N" etc
-  sectionName: string; // "本棟" "南棟" etc
+  sectionName: string; // UIには出さないが、互換のため保持
   floors: LaundryFloorDef[];
 };
 
@@ -173,9 +173,7 @@ function normalizeConfigToV2(raw: unknown): LaundryBoardConfigV2 | null {
 
         const sectionName = isNonEmptyString(s.sectionName)
           ? s.sectionName.trim()
-          : autoIndex === 0
-            ? "本棟"
-            : `棟${autoIndex + 1}`;
+          : "共通";
 
         autoIndex += 1;
 
@@ -195,7 +193,7 @@ function normalizeConfigToV2(raw: unknown): LaundryBoardConfigV2 | null {
 
     return {
       version: 2,
-      sections: [{ sectionKey: "A", sectionName: "本棟", floors }],
+      sections: [{ sectionKey: "A", sectionName: "共通", floors }],
       updatedAt,
     };
   }
@@ -266,7 +264,7 @@ export async function setLaundryConfigByProject(
         : "A";
       const sectionName = isNonEmptyString(s.sectionName)
         ? s.sectionName.trim()
-        : "本棟";
+        : "共通";
       const floors = normalizeFloors(s.floors);
       if (!floors.length) return null;
       return { sectionKey, sectionName, floors } satisfies LaundrySectionDef;
