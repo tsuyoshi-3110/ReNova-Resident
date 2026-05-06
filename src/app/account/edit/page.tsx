@@ -3,12 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
-import {
-  doc,
-  getDoc,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 
 import { auth, db } from "../../lib/firebaseClient";
 
@@ -50,7 +45,9 @@ function roomExistsInLaundryConfig(data: unknown, roomNo: string): boolean {
     for (const floor of floors) {
       const roomNos = Array.isArray(floor?.roomNos)
         ? floor.roomNos
-            .map((room) => normalizeText(typeof room === "string" ? room : String(room)))
+            .map((room) =>
+              normalizeText(typeof room === "string" ? room : String(room)),
+            )
             .filter(Boolean)
         : [];
 
@@ -63,7 +60,10 @@ function roomExistsInLaundryConfig(data: unknown, roomNo: string): boolean {
           ? floor.roomKukus
           : {};
 
-      if (normalizeText(roomKukus[normalizedRoomNo] as string) || normalizedRoomNo in roomKukus) {
+      if (
+        normalizeText(roomKukus[normalizedRoomNo] as string) ||
+        normalizedRoomNo in roomKukus
+      ) {
         return true;
       }
     }
@@ -138,7 +138,10 @@ export default function AccountEditPage() {
 
   const hasLaundryConfig = Boolean(laundryConfigData);
   const normalizedRoomNo = useMemo(() => normalizeText(roomNo), [roomNo]);
-  const normalizedDisplayName = useMemo(() => normalizeText(displayName), [displayName]);
+  const normalizedDisplayName = useMemo(
+    () => normalizeText(displayName),
+    [displayName],
+  );
   const roomExistsInConfig = useMemo(() => {
     if (!hasLaundryConfig || !normalizedRoomNo) return true;
     return roomExistsInLaundryConfig(laundryConfigData, normalizedRoomNo);
@@ -293,8 +296,12 @@ export default function AccountEditPage() {
 
             <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-300">
               <div>メールアドレス：{member.email || "（未設定）"}</div>
-              <div className="mt-1">シェアコード：{member.shareCode || "（未設定）"}</div>
-              <div className="mt-1">工事名：{member.projectName || "（未設定）"}</div>
+              <div className="mt-1">
+                シェアコード：{member.shareCode || "（未設定）"}
+              </div>
+              <div className="mt-1">
+                工事名：{member.projectName || "（未設定）"}
+              </div>
             </div>
 
             <button

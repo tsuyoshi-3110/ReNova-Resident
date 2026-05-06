@@ -97,7 +97,6 @@ export default function LaundryResidentSectionBoard({
   const validProjectId =
     typeof projectId === "string" && projectId.trim().length > 0;
 
-
   const [config, setConfig] = useState<LaundryBoardConfigV2 | null>(null);
 
   // ✅ 画面を開いた時は常に今日
@@ -115,9 +114,7 @@ export default function LaundryResidentSectionBoard({
     return saved;
   });
   const fixedRoomNo = toNonEmptyString(initialRoomNo);
-  const effectiveRoomFilterText = readOnlyRoomNo
-    ? fixedRoomNo
-    : roomFilterText;
+  const effectiveRoomFilterText = readOnlyRoomNo ? fixedRoomNo : roomFilterText;
 
   const dateInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -137,8 +134,6 @@ export default function LaundryResidentSectionBoard({
 
     el.focus();
   };
-
-
 
   // config
   useEffect(() => {
@@ -256,13 +251,11 @@ export default function LaundryResidentSectionBoard({
       {/* 操作（日付 + 部屋フィルター） */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900">
         <div className="flex flex-wrap items-center gap-3">
-
           {residentGroupTitle ? (
             <span className="px-1 py-2 text-sm font-extrabold text-gray-900 dark:text-gray-100">
               {residentGroupTitle}
             </span>
           ) : null}
-
 
           {readOnlyRoomNo ? (
             <span className="px-1 py-2 text-sm font-extrabold text-gray-900 dark:text-gray-100">
@@ -290,10 +283,6 @@ export default function LaundryResidentSectionBoard({
               )}
             </>
           )}
-
-
-
-
 
           {!exists && (
             <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-extrabold text-gray-700 dark:border-gray-800 dark:bg-gray-950 dark:text-gray-200">
@@ -352,7 +341,11 @@ export default function LaundryResidentSectionBoard({
       </div>
 
       {!exists ? null : (
-        <SectionBoard section={selectedSection} map={map} roomFilter={roomFilter} />
+        <SectionBoard
+          section={selectedSection}
+          map={map}
+          roomFilter={roomFilter}
+        />
       )}
     </div>
   );

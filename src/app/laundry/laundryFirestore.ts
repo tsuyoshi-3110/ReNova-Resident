@@ -109,13 +109,16 @@ function normalizeFloors(v: unknown): LaundryFloorDef[] {
       if (!isPlainObject(f)) return null;
 
       const floor = Number(f.floor);
-      if (!Number.isFinite(floor) || !Number.isInteger(floor) || floor < 1) return null;
+      if (!Number.isFinite(floor) || !Number.isInteger(floor) || floor < 1)
+        return null;
 
       const roomNos = normalizeRoomNos(f.roomNos);
 
       const roomsCountRaw = Number(f.roomsCount);
       const roomsCount =
-        Number.isFinite(roomsCountRaw) && Number.isInteger(roomsCountRaw) && roomsCountRaw > 0
+        Number.isFinite(roomsCountRaw) &&
+        Number.isInteger(roomsCountRaw) &&
+        roomsCountRaw > 0
           ? roomsCountRaw
           : roomNos.length;
 

@@ -239,7 +239,9 @@ export default function LaundryClient() {
   const [residentGroupTitle, setResidentGroupTitle] = useState("");
   const [todayWorks, setTodayWorks] = useState<OverallScheduleRow[]>([]);
   const [todayWorksLoading, setTodayWorksLoading] = useState(false);
-  const [workNotesByLabel, setWorkNotesByLabel] = useState<Record<string, string>>({});
+  const [workNotesByLabel, setWorkNotesByLabel] = useState<
+    Record<string, string>
+  >({});
 
   const [selectedRoomNo, setSelectedRoomNo] = useState("");
   const [configRoomNo, setConfigRoomNo] = useState("");
@@ -425,7 +427,13 @@ export default function LaundryClient() {
       return;
     }
 
-    const ref = doc(db, "projects", projectId, "laundryStatus", selectedWorkDateYmd);
+    const ref = doc(
+      db,
+      "projects",
+      projectId,
+      "laundryStatus",
+      selectedWorkDateYmd,
+    );
 
     const unsub = onSnapshot(
       ref,
@@ -531,31 +539,31 @@ export default function LaundryClient() {
                 const note = findWorkNoteByLabel(workNotesByLabel, row.label);
 
                 return (
-                <div
-                  key={`${row.groupTitle ?? "group"}-${row.label ?? "work"}-${idx}`}
-                  className="rounded-xl border p-3 dark:border-gray-800"
-                >
-                  <div className="flex items-start gap-2">
-                    <span
-                      className="mt-1 h-3 w-3 shrink-0 rounded-full border dark:border-gray-700"
-                      style={{ backgroundColor: row.color || "#9E9E9E" }}
-                    />
-                    <div className="min-w-0">
-                      <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-                        {row.label || "作業名未設定"}
-                      </div>
-                      <div className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
-                        {row.startYmd || "---- -- --"}〜
-                        {row.endYmd || "---- -- --"}
-                      </div>
-                      {note ? (
-                        <div className="mt-2 rounded-lg border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-200">
-                          注意事項：{note}
+                  <div
+                    key={`${row.groupTitle ?? "group"}-${row.label ?? "work"}-${idx}`}
+                    className="rounded-xl border p-3 dark:border-gray-800"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span
+                        className="mt-1 h-3 w-3 shrink-0 rounded-full border dark:border-gray-700"
+                        style={{ backgroundColor: row.color || "#9E9E9E" }}
+                      />
+                      <div className="min-w-0">
+                        <div className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                          {row.label || "作業名未設定"}
                         </div>
-                      ) : null}
+                        <div className="mt-1 text-xs font-bold text-gray-500 dark:text-gray-400">
+                          {row.startYmd || "---- -- --"}〜
+                          {row.endYmd || "---- -- --"}
+                        </div>
+                        {note ? (
+                          <div className="mt-2 rounded-lg border border-amber-300/40 bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-200">
+                            注意事項：{note}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
                 );
               })}
             </div>
